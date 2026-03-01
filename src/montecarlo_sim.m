@@ -104,11 +104,8 @@ function resultados = montecarlo_sim(num_iteraciones, estrategia_jugador, estrat
     resultados.saldo_neto         = saldo_jugador; % Indicador real de éxito
 end
 
-% ==========================================
-% FUNCIONES AUXILIARES
-% ==========================================
 
-% CALCULAR PUNTOS
+% calcular puntos
 function puntos = calcular_puntos(valores_cartas)
     puntos = sum(valores_cartas);
     num_ases = sum(valores_cartas == 11);
@@ -119,7 +116,7 @@ function puntos = calcular_puntos(valores_cartas)
     end
 end
 
-% BARAJA
+% baraja
 function baraja = crear_baraja_sim()
     baraja = zeros(52, 3);
     numeros = [1, 2:10, 11, 12, 13];
@@ -132,13 +129,14 @@ function baraja = crear_baraja_sim()
     end
 end
 
-% SACAR CARTA
+
+% sacar carta
 function [carta, baraja] = sacar_carta_sim(baraja)
     carta = baraja(1, :);
     baraja(1, :) = [];
 end
 
-% >>> TURNO DEl JUGADOR <<<
+% turno del jugador
 function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategia, cartas_J, P_J, carta_visible_casa)
     
     % Se calcula el índice basado en las cartas que el jugador YA tiene (usualmente 2 al iniciar)
@@ -148,79 +146,135 @@ function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategi
     %Comienzo del Switch
     switch estrategia
         
-        %-------- Implementacion: 1) Valor Objetivo
+
         case 'Valor Objetivo'
-            % --- Valor Objetivo (Basado en Probabilidad de pasarse) ---
-            % Se pide carta siempre y cuando el riesgo de pasarse sea menor al 50%
-            
+            %  valor Objetivo (umbral = 17) 
+            % Se pide carta hasta llegar a >= 17, luego se planta
+            umbral = 17;
+            puntos_J = calcular_puntos(P_J);
+
+            % si ya supera el umbral con las 2 cartas iniciales, se planta
+            if puntos_J >= umbral
+                return;
+            end
+
             while true
-                puntos_J = calcular_puntos(P_J);
-                
-                % Si se pasó de 21 -> pierde
-                if puntos_J > 21
-                    se_paso = true;
-                    return;
-                end
-                
-                % Si tiene 21 exacto, se planta automáticamente para no arruinarlo
-                if puntos_J == 21
-                    return;
-                end
-                
-                % --- Calcular probabilidad exacta de pasarse (Pp) ---
-                bustos = 0;
-                num_cartas_restantes = size(baraja, 1);
-                
-                for c = 1:num_cartas_restantes
-                    % Simulamos qué pasaría con los puntos si sacamos esta carta específica
-                    % (Usamos calcular_puntos para que maneje correctamente si la carta es un As)
-                    puntos_simulados = calcular_puntos([P_J, baraja(c, 2)]);
-                    if puntos_simulados > 21
-                        bustos = bustos + 1;
-                    end
-                end
-                
-                Pp = bustos / num_cartas_restantes;
-                
-                % Si hay >= 50% de probabilidad de pasarse, se planta y termina el turno
-                if Pp >= 0.5
-                    return; 
-                end
-                
-                % Si la probabilidad es segura (riesgo < 50%), pide otra carta
                 [carta, baraja] = sacar_carta_sim(baraja);
                 cartas_J(indice, :) = carta;
                 P_J(indice) = carta(2);
                 indice = indice + 1;
-            end
-        % --------- Fin de implementacion 1) --------------------------
-        
-        %-------- Implementacion: 2) Del repartidor
-        case 'Del repartidor'
-            % Estrategia del Repartidor (Dealer)
-            % Regla estricta: Pedir si tiene 16 o menos. Plantarse con 17 o más.
-            
-            while true
+
                 puntos_J = calcular_puntos(P_J);
-                
-                % Si se pasó de 21 -> pierde
+
                 if puntos_J > 21
                     se_paso = true;
                     return;
                 end
-                
-                % Si tiene menos de 17, está obligado a pedir carta
-                if puntos_J < 17
-                    [carta, baraja] = sacar_carta_sim(baraja);
-                    cartas_J(indice, :) = carta;
-                    P_J(indice) = carta(2);
-                    indice = indice + 1;
-                else
-                    % Si tiene 17 o más, está obligado a plantarse y termina su turno
+
+                if puntos_J >= umbral
                     return;
                 end
             end
-        % --------- Fin de implementacion 2) --------------------------
+
+        case 'Del repartidor'
+             % columnas: carta del dealer [2, 3, 4, 5, 6, 7, 8, 9, Face(10), Ace(11)]
+
+            % tabla hard (ve =valor esperado)
+            ve_hard = [
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 2
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 3
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 4
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 5
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 6
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 7
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 8
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 9
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 10
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 11
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 12
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 13
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 14
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 15
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % 16
+                -0.1530, -0.1172, -0.0806, -0.0449,  0.0117, -0.1068, -0.3820, -0.4232, -0.4644, -0.6386;  % 17
+                 0.1217,  0.14  83,  0.1759,  0.1996,  0.2834,  0.3996,  0.1060, -0.1832, -0.2415, -0.3771;  % 18
+                 0.3863,  0.4044,  0.4232,  0.4395,  0.4960,  0.6160,  0.5939,  0.2876, -0.0187, -0.1155;  % 19
+                 0.6400,  0.6503,  0.6610,  0.6704,  0.7040,  0.7732,  0.7918,  0.7584,  0.4350,  0.1461;  % 20
+                 0.8820,  0.8853,  0.8888,  0.8918,  0.9028,  0.9259,  0.9306,  0.9392,  0.8117,  0.3307;  % 21
+            ];
+
+            % tabla soft (ve = valor esperado)
+            ve_soft = [
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % S11
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % S12
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % S13
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % S14
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % S15
+                -0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.5758, -0.7694;  % S16
+                -0.1530, -0.1172, -0.0806, -0.0449,  0.0117, -0.1068, -0.3820, -0.4232, -0.4644, -0.6386;  % S17
+                 0.1217,  0.1483,  0.1759,  0.1996,  0.2834,  0.3996,  0.1060, -0.1832, -0.2415, -0.3771;  % S18
+                 0.3863,  0.4044,  0.4232,  0.4395,  0.4960,  0.6160,  0.5939,  0.2876, -0.0187, -0.1155;  % S19
+                 0.6400,  0.6503,  0.6610,  0.6704,  0.7040,  0.7732,  0.7918,  0.7584,  0.4350,  0.1461;  % S20
+                 0.8820,  0.8853,  0.8888,  0.8918,  0.9028,  0.9259,  0.9306,  0.9392,  0.8117,  0.3307;  % S21
+            ];
+
+            % fila face
+            ve_face = [-0.2928, -0.2523, -0.2111, -0.1672, -0.1537, -0.4754, -0.5105, -0.5431, -0.4989, -0.4617];
+
+            % fila BJ
+            ve_bj = [1.5000, 1.5000, 1.5000, 1.5000, 1.5000, 1.5000, 1.5000, 1.5000, 1.3846, 1.0385];
+
+            % mapear carta visible de la casa a columna
+            dealer_val = carta_visible_casa(2);
+            if dealer_val == 11  % Ace
+                col = 10;
+            else
+                col = dealer_val - 1;  % 2->1, 3->2, ..., 10->9
+            end
+
+            % detectar si la mano es soft (tiene un As contado como 11)
+            es_soft = @(vals) any(vals == 11) & sum(vals) <= 21;
+
+            % decision 
+            while true
+                puntos_J = calcular_puntos(P_J);
+
+                if puntos_J > 21
+                    break;
+                end
+
+                % buscar valor esperado en la matriz
+                if es_soft(P_J)
+                    % mano soft: S11-S21
+                    fila_soft = puntos_J - 10;  % S11->1, S12->2, ..., S21->11
+                    fila_soft = max(1, min(fila_soft, 11));
+                    ve = ve_soft(fila_soft, col);
+                else
+                    % mano hard: 2-21
+                    fila_hard = puntos_J - 1;  % 2->1, 3->2, ..., 21->20
+                    fila_hard = max(1, min(fila_hard, 20));
+                    ve = ve_hard(fila_hard, col);
+                end
+
+                % valor esperado positivo -> Stand, negativo -> Hit
+                if ve > 0
+                    return;
+                end
+
+                % Hit
+                [carta, baraja] = sacar_carta_sim(baraja);
+                cartas_J(indice, :) = carta;
+                P_J(indice) = carta(2);
+                indice = indice + 1;
+
+                puntos_J = calcular_puntos(P_J);
+                fprintf('[JUGADOR] Hit -> carta=%d, puntos=%d\n', carta(2), puntos_J);
+
+                if puntos_J > 21
+                    se_paso = true;
+                    return;
+                end
+            end
         
         %-------- Implementacion: 3) Del puntaje Optimo (JJ)
         case 'optimo'
