@@ -77,24 +77,30 @@ end
 
 % baraja inglesa contiene 52 cartas
 % Columna 1: numero (1=As, 2-10, 11=J, 12=Q, 13=K)
-% Columna 2: valor HARD (As=1, figuras=10)
-% Columna 3: valor SOFT (As=11, figuras=10)
-% Columna 4: palo (1=Corazones, 2=Diamantes, 3=Treboles, 4=Picas)
+% Columna 2: valor (As=11, figuras=10, el resto su valor)
+% Columna 3: palo (1=Corazones, 2=Diamantes, 3=Treboles, 4=Picas)
 function baraja = crear_baraja_sim()
-    baraja = zeros(52, 4);
-    numeros     = [1,  2:10, 11, 12, 13];
-    valores_hard = [1,  2:10, 10, 10, 10];   % As = 1
-    valores_soft = [11, 2:10, 10, 10, 10];   % As = 11
+    baraja = zeros(52, 3);
+    numeros = [1, 2:10, 11, 12, 13];
+    valores = [11, 2:10, 10, 10, 10];  % As=11, calcular_puntos lo ajusta a 1 si se pasa
     for palo = 1:4
         rango = (palo-1)*13 + 1 : palo*13;
         baraja(rango, 1) = numeros;
-        baraja(rango, 2) = valores_hard;
-        baraja(rango, 3) = valores_soft;
-        baraja(rango, 4) = palo;
+        baraja(rango, 2) = valores;
+        baraja(rango, 3) = palo;
     end
 end
 
 
+% calcular puntos (manejo dinamico del As: 11 -> 1 si se pasa de 21)
+function puntos = calcular_puntos(valores_cartas)
+    puntos = sum(valores_cartas);
+    num_ases = sum(valores_cartas == 11);
+    while puntos > 21 && num_ases > 0
+        puntos = puntos - 10;
+        num_ases = num_ases - 1;
+    end
+end
 
 
 % sacar carta
@@ -113,8 +119,31 @@ function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategi
 
     switch estrategia
         case 'valor'
-            % Estrategia del Valor Objetivo
-            % TODO: Implementar
+            % estrategia del Valor Objetivo (umbral = 17)
+            umbral = 17;
+
+            % si ya supera el umbral con las 2 cartas iniciales, se planta
+            if puntos_J >= umbral
+                return;
+            end
+
+            while true
+                [carta, baraja] = sacar_carta_sim(baraja);
+                cartas_J(indice, :) = carta;
+                P_J(indice) = carta(2);
+                indice = indice + 1;
+
+                puntos_J = calcular_puntos(P_J);
+
+                if puntos_J > 21
+                    se_paso = true;
+                    return;
+                end
+
+                if puntos_J >= umbral
+                    return;
+                end
+            end
 
         case 'repartidor'
             % Estrategia del Repartidor
@@ -151,8 +180,29 @@ function [puntos_casa, se_paso] = turno_casa_auto(baraja, estrategia, cartas_C, 
             % TODO: Implementar
 
         case 'valor'
-            % Estrategia del Valor Objetivo
-            % TODO: Implementar
+            % Estrategia del Valor Objetivo (umbral = 17)
+            umbral = 17;
+
+            if puntos_casa >= umbral
+                return;
+            end
+
+            while true
+                [carta, baraja] = sacar_carta_sim(baraja);
+                cartas_C(indice, :) = carta;
+                P_C(indice) = carta(2);
+                puntos_casa = calcular_puntos(P_C);
+                indice = indice + 1;
+
+                if puntos_casa > 21
+                    se_paso = true;
+                    return;
+                end
+
+                if puntos_casa >= umbral
+                    return;
+                end
+            end
 
         otherwise
             % Default: usar estrategia valor objetivo
