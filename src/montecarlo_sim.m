@@ -278,100 +278,92 @@ function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategi
         
         %-------- Implementacion: 3) Del puntaje Optimo (JJ)
         case 'optimo'
-            % Estrategia del Puntaje Óptimo (Estrategia Básica simplificada)
-            % carta_visible_casa es un array [numero, valor, palo], el valor está en la pos 2
-            valor_casa = carta_visible_casa(2);
+            % Mapeo de columna de la casa (2->Col 1, 10/Face->Col 9, As(11)->Col 10)
+            val_c = carta_visible_casa(2);
+            col_casa = val_c - 1; 
+            if val_c == 11, col_casa = 10; end 
+            
+            % MATRIZ O (Diapositiva 104) - 1 = Pedir (H), 0 = Plantarse
+            M_O_Dura = zeros(21, 10);
+            M_O_Dura(1:11, :) = 1; % 0 a 11 siempre pide
+            M_O_Dura(12, [1, 2, 6, 7, 8, 9, 10]) = 1; % Pide vs 2,3 y 7-As
+            M_O_Dura(13:16, 6:10) = 1; % Pide vs 7-As
+            
+            M_O_Suave = zeros(21, 10);
+            M_O_Suave(12:17, :) = 1; % Suave 12 a 17 siempre pide
+            M_O_Suave(18, 8:10) = 1; % Suave 18 pide vs 9, Face, As
             
             while true
                 puntos_J = calcular_puntos(P_J);
-                
-                % Verificar si ya se pasó
                 if puntos_J > 21
-                    se_paso = true;
-                    return;
+                    se_paso = true; return;
                 end
                 
-                % Determinar si la mano es "suave" (tiene un As valiendo 11 sin pasarse)
                 ases_totales = sum(P_J == 11);
-                ases_reducidos = (sum(P_J) - puntos_J) / 10; % Cuántos Ases se convirtieron en 1
+                ases_reducidos = (sum(P_J) - puntos_J) / 10;
                 es_suave = (ases_totales > ases_reducidos);
                 
-                % Bandera para decidir si pedimos o nos plantamos
-                pedir_carta = false;
-                
-                % LÓGICA DE DECISIÓN (Estrategia Básica de Blackjack)
+                % Consultar la matriz de Márkov del profesor
                 if es_suave
-                    % Reglas para manos suaves
-                    if puntos_J <= 17
-                        pedir_carta = true;
-                    elseif puntos_J == 18
-                        % Si tenemos 18 suave, pedimos solo si la casa tiene una carta fuerte (9, 10, As)
-                        if valor_casa >= 9 
-                            pedir_carta = true;
-                        end
-                    end
-                    % Si es 19 o 20 suave, nos plantamos (pedir_carta se queda false)
+                    pedir_carta = M_O_Suave(puntos_J, col_casa);
                 else
-                    % Reglas para manos duras
-                    if puntos_J <= 11
-                        % Siempre pedir si no hay riesgo de pasarse
-                        pedir_carta = true;
-                    elseif puntos_J == 12
-                        % Con 12, plantarse si la casa tiene una carta débil (4, 5, 6), si no, pedir
-                        if valor_casa < 4 || valor_casa > 6
-                            pedir_carta = true;
-                        end
-                    elseif puntos_J >= 13 && puntos_J <= 16
-                        % Con 13-16, plantarse si la casa tiene carta débil (2-6), pedir si es fuerte (7-11)
-                        if valor_casa >= 7
-                            pedir_carta = true;
-                        end
-                    end
-                    % Si es 17 duro o más, nos plantamos siempre
+                    pedir_carta = M_O_Dura(puntos_J, col_casa);
                 end
                 
-                % Ejecutar la decisión
-                if pedir_carta
+                if pedir_carta == 1
                     [carta, baraja] = sacar_carta_sim(baraja);
                     cartas_J(indice, :) = carta;
                     P_J(indice) = carta(2);
                     indice = indice + 1;
                 else
-                    % Nos plantamos y terminamos el turno
-                    return;
+                    return; % Se planta (espacio en blanco en diapositiva 104)
                 end
             end
         % --------- Fin de implementacion 3) --------------------------
         
         %-------- Implementacion: 4) Doblar apuesta (JJ)
         case 'doblar_apuesta'
-            % Estrategia: Doblar apuesta
-            % Regla: Si las 2 cartas iniciales suman 9, 10 u 11, se dobla.
-            % Al doblar, se pide EXACTAMENTE UNA CARTA y termina el turno.
+            val_c = carta_visible_casa(2);
+            col_casa = val_c - 1; 
+            if val_c == 11, col_casa = 10; end
+            
+            % MATRIZ D (Diapositiva 106) - 1 = Doblar (D), 0 = No doblar
+            M_D_Dura = zeros(21, 10);
+            M_D_Dura(9, 2:5) = 1;      % D vs 3,4,5,6
+            M_D_Dura(10, 1:8) = 1;     % D vs 2 al 9
+            M_D_Dura(11, 1:9) = 1;     % D vs 2 al Face
+            
+            M_D_Suave = zeros(21, 10);
+            M_D_Suave(13, 4:5) = 1;    % D vs 5,6
+            M_D_Suave(14, 3:5) = 1;    % D vs 4,5,6
+            M_D_Suave(15, 3:4) = 1;    % D vs 4,5
+            M_D_Suave(16, 3:5) = 1;    % D vs 4,5,6
+            M_D_Suave(17:18, 2:5) = 1; % D vs 3,4,5,6
             
             puntos_J = calcular_puntos(P_J);
+            ases_totales = sum(P_J == 11);
+            ases_reducidos = (sum(P_J) - puntos_J) / 10;
+            es_suave = (ases_totales > ases_reducidos);
             
-            % Verificamos si tiene exactamente 2 cartas y suma 9, 10 u 11
-            if length(P_J) == 2 && (puntos_J >= 9 && puntos_J <= 11)
-                
-                % Pide EXACTAMENTE UNA carta
+            doblar = 0;
+            if length(P_J) == 2 % Solo se permite doblar con 2 cartas iniciales
+                if es_suave
+                    doblar = M_D_Suave(puntos_J, col_casa);
+                else
+                    doblar = M_D_Dura(puntos_J, col_casa);
+                end
+            end
+            
+            if doblar == 1
                 [carta, baraja] = sacar_carta_sim(baraja);
                 cartas_J(indice, :) = carta;
                 P_J(indice) = carta(2);
-                
-                puntos_J = calcular_puntos(P_J);
-                
-                % Verificamos si se pasó (poco probable sacando 1 carta con 9-11, pero por seguridad)
-                if puntos_J > 21
+                if calcular_puntos(P_J) > 21
                     se_paso = true;
                 end
-                
-                % Termina el turno obligatoriamente (forzado a plantarse)
-                return;
-                
+                return; % Termina el turno forzosamente
             else
-                % Si la mano no es apta para doblar (ej. tiene 15), jugamos normal.
-                % Llamamos recursivamente a la función usando la estrategia 'optimo'
+                % Si la matriz dice H (pedir) o en blanco (plantarse), delegamos a la matriz O
                 [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, 'optimo', cartas_J, P_J, carta_visible_casa);
                 return;
             end
@@ -379,49 +371,50 @@ function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategi
         
         %-------- Implementacion: 5) Dividir Juego (JJ)
         case 'dividir_juego'
-            % Estrategia: Dividir Juego (Split)
-            % Regla: Si las 2 cartas iniciales tienen el mismo valor, se separan.
+            val_c = carta_visible_casa(2);
+            col_casa = val_c - 1; 
+            if val_c == 11, col_casa = 10; end
             
-            % Verificamos si tiene exactamente 2 cartas y si tienen el mismo valor numérico
+            % MATRIZ S (Diapositiva 108) - 1 = Dividir (S), 0 = No dividir
+            M_S = zeros(11, 10);
+            M_S(2:3, 1:6) = 1;       % Pares de 2 y 3: S vs 2 al 7
+            M_S(4, 4:5) = 1;         % Pares de 4: S vs 5,6
+            M_S(6, 1:5) = 1;         % Pares de 6: S vs 2 al 6
+            M_S(7, 1:6) = 1;         % Pares de 7: S vs 2 al 7
+            M_S(8, 1:8) = 1;         % Pares de 8: S vs 2 al 9
+            M_S(9, [1,2,3,4,5,7,8]) = 1; % Pares de 9: S vs 2-6 y 8-9
+            M_S(11, :) = 1;          % Pares de Ases: S vs Todos
+            
+            dividir = 0;
             if length(P_J) == 2 && P_J(1) == P_J(2)
+                carta_par = P_J(1);
+                dividir = M_S(carta_par, col_casa);
+            end
                 
-                % Separamos las cartas iniciales
+            if dividir == 1
                 mano1_cartas = cartas_J(1, :);
                 mano1_P = P_J(1);
-                
                 mano2_cartas = cartas_J(2, :);
                 mano2_P = P_J(2);
                 
-                % --- JUGAR LA MANO 1 ---
-                % Repartimos la segunda carta obligatoria para la Mano 1
+                % MANO 1
                 [carta_nueva1, baraja] = sacar_carta_sim(baraja);
                 mano1_cartas = [mano1_cartas; carta_nueva1];
                 mano1_P = [mano1_P, carta_nueva1(2)];
-                
-                % Jugamos la mano 1 completa usando la estrategia básica ('optimo')
                 [mano1_cartas, mano1_P, baraja, se_paso1] = turno_jugador_auto(baraja, 'optimo', mano1_cartas, mano1_P, carta_visible_casa);
                 
-                % --- JUGAR LA MANO 2 ---
-                % Repartimos la segunda carta obligatoria para la Mano 2
+                % MANO 2
                 [carta_nueva2, baraja] = sacar_carta_sim(baraja);
                 mano2_cartas = [mano2_cartas; carta_nueva2];
                 mano2_P = [mano2_P, carta_nueva2(2)];
-                
-                % Jugamos la mano 2 completa usando la estrategia básica ('optimo')
                 [mano2_cartas, mano2_P, baraja, se_paso2] = turno_jugador_auto(baraja, 'optimo', mano2_cartas, mano2_P, carta_visible_casa);
                 
-                % --- GUARDAR RESULTADOS DE AMBAS MANOS ---
-                % Como ahora hay DOS manos, devolvemos 'Cell Arrays' (arreglos de celdas)
-                % para encapsular la información y no mezclarla.
                 cartas_J = {mano1_cartas, mano2_cartas};
                 P_J = {mano1_P, mano2_P};
-                se_paso = [se_paso1, se_paso2]; % Array lógico con estado de ambas manos
-                
+                se_paso = [se_paso1, se_paso2];
                 return;
-                
             else
-                % Si no son pares (ej. 10 y 6), no se puede dividir.
-                % Jugamos de forma normal usando la estrategia básica de respaldo.
+                % Si no son pares o la matriz está en blanco, delegamos a la matriz O
                 [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, 'optimo', cartas_J, P_J, carta_visible_casa);
                 return;
             end
