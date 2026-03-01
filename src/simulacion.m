@@ -48,12 +48,19 @@ end
 function simulacion_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.output = hObject;
 
-
-
 % Limpiar campos de resultados
 set(handles.editVecesJ, 'String', '');
 set(handles.editVecesC, 'String', '');
 set(handles.edit4, 'String', '');
+
+% --- NUEVO: Actualizar las opciones de los menús desplegables ---
+% Implementado para Black Jack
+% Opciones para la Casa
+set(handles.popupEstrategiasC, 'String', {'Valor Objetivo', 'Probabilidades'});
+
+% Opciones para el Jugador
+set(handles.popupEstrategiasJ, 'String', {'Valor Objetivo', 'Del repartidor', 'Del puntaje optimo', 'Doblar Apuesta', 'Dividir Juego'});
+% ----------------------------------------------------------------
 
 guidata(hObject, handles);
 
@@ -102,9 +109,9 @@ estrategias_C = get(handles.popupEstrategiasC, 'String');
 idx_C = get(handles.popupEstrategiasC, 'Value');
 est_C_nombre = estrategias_C{idx_C};
 
-% Mapear nombres 
-est_J = mapear_estrategia(est_J_nombre);
-est_C = mapear_estrategia(est_C_nombre);
+% Mapear nombres (AQUÍ CAMBIAMOS A DOS FUNCIONES DISTINTAS)
+est_J = mapear_estrategia_jugador(est_J_nombre);
+est_C = mapear_estrategia_casa(est_C_nombre);
 
 % Ejecutar la simulacion
 fprintf('\nSimulando %d partidas...\n', num_iter);
@@ -132,6 +139,55 @@ set(handles.axesGrafica, 'FontSize', 10);
 fprintf('\n=== Monte Carlo: %d partidas ===\n', num_iter);
 fprintf('Jugador: %.1f%% | Casa: %.1f%% (empates: %d)\n', ...
     resultados.porcentaje_jugador, resultados.porcentaje_casa, resultados.empates);
+% NUEVO: Imprimir el saldo neto para ver si doblar la apuesta funcionó financieramente
+fprintf('>>> SALDO NETO DEL JUGADOR: %d unidades <<<\n', resultados.saldo_neto);
+% % % Leer el numero de iteraciones
+% % num_iter = str2double(get(handles.textENumero, 'String'));
+% % if isnan(num_iter) || num_iter <= 0
+% %     msgbox('Error: ingresa un numero valido de iteraciones.', 'Error', 'error');
+% %     return;
+% % end
+% % num_iter = round(num_iter);
+% % 
+% % % Leer las estrategias seleccionadas
+% % estrategias_J = get(handles.popupEstrategiasJ, 'String');
+% % idx_J = get(handles.popupEstrategiasJ, 'Value');
+% % est_J_nombre = estrategias_J{idx_J};
+% % 
+% % estrategias_C = get(handles.popupEstrategiasC, 'String');
+% % idx_C = get(handles.popupEstrategiasC, 'Value');
+% % est_C_nombre = estrategias_C{idx_C};
+% % 
+% % % Mapear nombres 
+% % est_J = mapear_estrategia(est_J_nombre);
+% % est_C = mapear_estrategia(est_C_nombre);
+% % 
+% % % Ejecutar la simulacion
+% % fprintf('\nSimulando %d partidas...\n', num_iter);
+% % resultados = montecarlo_sim(num_iter, est_J, est_C);
+% % 
+% % % Mostrar resultados en los edit text
+% % set(handles.editVecesJ, 'String', sprintf('%d (%.1f%%)', resultados.victorias_jugador, resultados.porcentaje_jugador));
+% % set(handles.editVecesC, 'String', sprintf('%d (%.1f%%)', resultados.victorias_casa, resultados.porcentaje_casa));
+% % set(handles.edit4, 'String', sprintf('%d', resultados.empates));
+% % 
+% % % Dibujar histograma en el axes
+% % cla(handles.axesGrafica);
+% % categorias = categorical({'Jugador', 'Casa'});
+% % categorias = reordercats(categorias, {'Jugador', 'Casa'});
+% % datos = [resultados.victorias_jugador, resultados.victorias_casa];
+% % colores = [0.2 0.6 0.9; 0.9 0.3 0.3];
+% % b = bar(handles.axesGrafica, categorias, datos, 0.6);
+% % b.FaceColor = 'flat';
+% % b.CData = colores;
+% % ylabel(handles.axesGrafica, 'Victorias', 'FontSize', 10);
+% % title(handles.axesGrafica, sprintf('Resultados (%d partidas)', num_iter), 'FontSize', 12);
+% % grid(handles.axesGrafica, 'on');
+% % set(handles.axesGrafica, 'FontSize', 10);
+% % 
+% % fprintf('\n=== Monte Carlo: %d partidas ===\n', num_iter);
+% % fprintf('Jugador: %.1f%% | Casa: %.1f%% (empates: %d)\n', ...
+% %     resultados.porcentaje_jugador, resultados.porcentaje_casa, resultados.empates);
 
 
 % --- Executes on selection change in popupEstrategiasC.
@@ -155,23 +211,49 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
-
-%  mapear el nombre de estrategia 
-function clave = mapear_estrategia(nombre)
-    switch lower(strtrim(nombre))
-        case {'probabilidad', 'probabilistica'}
-            clave = 'probabilistica';
-        case 'conservadora'
-            clave = 'conservadora';
-        case 'moderada'
-            clave = 'moderada';
-        case 'arriesgada'
-            clave = 'arriesgada';
-        otherwise
-            clave = 'moderada';  % default
+%  mapear el nombre de estrategia del JUGADOR
+function clave = mapear_estrategia_jugador(nombre)
+    nombre_min = lower(strtrim(nombre));
+    if contains(nombre_min, 'objetivo')
+        clave = 'Valor Objetivo';
+    elseif contains(nombre_min, 'repartidor')
+        clave = 'Del repartidor';
+    elseif contains(nombre_min, 'optimo') || contains(nombre_min, 'óptimo') || contains(nombre_min, 'básica')
+        clave = 'optimo';
+    elseif contains(nombre_min, 'doblar')
+        clave = 'doblar_apuesta';
+    elseif contains(nombre_min, 'dividir') || contains(nombre_min, 'split')
+        clave = 'dividir_juego';
+    else
+        clave = 'optimo';  % default por seguridad
     end
+%end
 
 
+%  mapear el nombre de estrategia de la CASA
+function clave = mapear_estrategia_casa(nombre)
+    nombre_min = lower(strtrim(nombre));
+    if contains(nombre_min, 'probabilidad') || contains(nombre_min, 'probabilistica')
+        clave = 'probabilidad';
+    else
+        clave = 'valor_objetivo'; % default clásico (se planta en 17)
+    end
+%end
+
+% % mapear el nombre de estrategia 
+% % function clave = mapear_estrategia(nombre)
+% %     switch lower(strtrim(nombre))
+% %         case {'probabilidad', 'probabilistica'}
+% %             clave = 'probabilistica';
+% %         case 'conservadora'
+% %             clave = 'conservadora';
+% %         case 'moderada'
+% %             clave = 'moderada';
+% %         case 'arriesgada'
+% %             clave = 'arriesgada';
+% %         otherwise
+% %             clave = 'moderada';  % default
+% %     end
 
 function editVecesC_Callback(hObject, eventdata, handles)
 % hObject    handle to editVecesC (see GCBO)
@@ -193,7 +275,6 @@ function editVecesC_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
-
 
 
 function editVecesJ_Callback(hObject, eventdata, handles)
