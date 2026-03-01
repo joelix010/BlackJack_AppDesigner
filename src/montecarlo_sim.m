@@ -5,42 +5,68 @@ function resultados = montecarlo_sim(num_iteraciones, estrategia_jugador, estrat
     empates           = 0;
 
     for iter = 1:num_iteraciones
-        % Crear y barajear mazo
+        % crear y barajear mazo
         baraja_original = crear_baraja_sim();
-        baraja = baraja_original(randperm(40), :);
+        baraja = baraja_original(randperm(52), :);
 
-        % Turno del jugador
-        [cartas_J, P_J, baraja, jugador_se_paso] = turno_jugador_auto(baraja, estrategia_jugador);
+        % repartir cartas
+        [carta1_J, baraja] = sacar_carta_sim(baraja);  % 1ra carta jugador (boca arriba)
+        [carta1_C, baraja] = sacar_carta_sim(baraja);  % 1ra carta casa (boca arriba)
+        [carta2_J, baraja] = sacar_carta_sim(baraja);  % 2da carta jugador (boca arriba)
+        [carta2_C, baraja] = sacar_carta_sim(baraja);  % 2da carta casa (boca abajo)
 
-        % Si el jugador se paso de 7.5, la casa gana automaticamente
+        % mano inicial del jugador (2 cartas)
+        cartas_J = [carta1_J; carta2_J];
+        P_J = [carta1_J(2), carta2_J(2)];
+
+        % mano inicial de la casa (2 cartas)
+        cartas_C = [carta1_C; carta2_C];
+        P_C = [carta1_C(2), carta2_C(2)];
+
+        puntos_J = calcular_puntos(P_J);
+        puntos_C = calcular_puntos(P_C);
+
+        blackjack_J = (puntos_J == 21);
+        blackjack_C = (puntos_C == 21);
+
+        % verificar blackjack (21 con 2 cartas)
+        if blackjack_J && blackjack_C
+            empates = empates + 1;
+            continue;
+        elseif blackjack_J
+            victorias_jugador = victorias_jugador + 1;
+            continue;
+        elseif blackjack_C
+            victorias_casa = victorias_casa + 1;
+            continue;
+        end
+
+        % turno del jugador (ya tiene 2 cartas)
+        [cartas_J, P_J, baraja, jugador_se_paso] = turno_jugador_auto(baraja, estrategia_jugador, cartas_J, P_J, carta1_C);
+
         if jugador_se_paso
             victorias_casa = victorias_casa + 1;
             continue;
         end
 
-        % Turno de la casa
-        [P_C, casa_se_paso] = turno_casa_auto(baraja_original, baraja, cartas_J, P_J, estrategia_casa);
-
-        % Si la casa se paso de 7.5, el jugador gana automaticamente
+        % turno de la casa
+        [puntos_casa, casa_se_paso] = turno_casa_auto(baraja, estrategia_casa, cartas_C, P_C, P_J);
         if casa_se_paso
             victorias_jugador = victorias_jugador + 1;
             continue;
         end
-
-        % Comparar puntos para determinar ganador
-        puntos_J = sum(P_J);
-        if P_C > puntos_J
+        % comparar puntos finales
+        puntos_J = calcular_puntos(P_J);
+        if puntos_casa > puntos_J
             victorias_casa = victorias_casa + 1;
-        elseif P_C == puntos_J
-            % En empate, gana la casa
+        elseif puntos_casa == puntos_J
             empates = empates + 1;
-            victorias_casa = victorias_casa + 1;
         else
             victorias_jugador = victorias_jugador + 1;
         end
     end
 
-    % Armar struct de resultados
+    % armar struct de resultados
     resultados.victorias_jugador  = victorias_jugador;
     resultados.victorias_casa     = victorias_casa;
     resultados.empates            = empates;
@@ -49,249 +75,87 @@ function resultados = montecarlo_sim(num_iteraciones, estrategia_jugador, estrat
 end
 
 
-% BARAJA
+% baraja inglesa contiene 52 cartas
+% Columna 1: numero (1=As, 2-10, 11=J, 12=Q, 13=K)
+% Columna 2: valor HARD (As=1, figuras=10)
+% Columna 3: valor SOFT (As=11, figuras=10)
+% Columna 4: palo (1=Corazones, 2=Diamantes, 3=Treboles, 4=Picas)
 function baraja = crear_baraja_sim()
-    baraja = zeros(40, 3);
-    numeros = [1:7, 10:12];
-    valores = [1:7, 0.5, 0.5, 0.5];
+    baraja = zeros(52, 4);
+    numeros     = [1,  2:10, 11, 12, 13];
+    valores_hard = [1,  2:10, 10, 10, 10];   % As = 1
+    valores_soft = [11, 2:10, 10, 10, 10];   % As = 11
     for palo = 1:4
-        rango = (palo-1)*10 + 1 : palo*10;
+        rango = (palo-1)*13 + 1 : palo*13;
         baraja(rango, 1) = numeros;
-        baraja(rango, 2) = valores;
-        baraja(rango, 3) = palo;
+        baraja(rango, 2) = valores_hard;
+        baraja(rango, 3) = valores_soft;
+        baraja(rango, 4) = palo;
     end
 end
 
 
-% SACAR CARTA
+
+
+% sacar carta
 function [carta, baraja] = sacar_carta_sim(baraja)
     carta = baraja(1, :);
     baraja(1, :) = [];
 end
 
 
-% TURNO DEL JUGADOR
-% TURNO DEL JUGADOR
-function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategia)
-    cartas_J = [];
-    P_J = [];
-    indice = 1;
+% turno del jugador
+% Estrategias: valor, repartidor, optimo, doblar, dividir
+function [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, estrategia, cartas_J, P_J, carta_visible_casa)
     se_paso = false;
+    puntos_J = calcular_puntos(P_J);
+    indice = size(cartas_J, 1) + 1;
 
     switch estrategia
-        case 'probabilidad'
-            % --- Estrategia probabilistica ---
-            while true
-                [carta, baraja] = sacar_carta_sim(baraja);
-                cartas_J(indice, :) = carta;
-                P_J(indice) = carta(2);
-                indice = indice + 1;
+        case 'valor'
+            % Estrategia del Valor Objetivo
+            % TODO: Implementar
 
-                puntos_J = sum(P_J);
+        case 'repartidor'
+            % Estrategia del Repartidor
+            % TODO: Implementar
 
-                % Se paso de 7.5 -> pierde
-                if puntos_J > 7.5
-                    se_paso = true;
-                    return;
-                end
+        case 'optimo'
+            % Estrategia del Puntuaje Optimo
+            % TODO: Implementar
 
-                % Calcular prob de pasarse si pide otra carta
-                cartas_pasan = (baraja(:, 2) + puntos_J) > 7.5;
-                Pp = sum(cartas_pasan) / size(baraja, 1);
+        case 'doblar'
+            % Estrategia Doblar Apuesta
+            % TODO: Implementar
 
-                % Si hay >= 50% de probabilidad de pasarse, se planta
-                if Pp >= 0.5
-                    return;
-                end
-            end
-
-        case 'valor_objetivo'
-            % --- Estrategia por valor objetivo (5.5) ---
-            umbral = 5.5; 
-            
-            while true
-                [carta, baraja] = sacar_carta_sim(baraja);
-                cartas_J(indice, :) = carta;
-                P_J(indice) = carta(2);
-                indice = indice + 1;
-                
-                puntos_J = sum(P_J);
-
-                if puntos_J > 7.5
-                    se_paso = true;
-                    return;
-                end
-
-                % Función f1(mp): Si el puntaje es > 5.5, se planta (P)
-                if puntos_J > umbral
-                    return;
-                end
-            end
-            
-        case 'valor_objetivo_aleatorio'
-            % --- Estrategia por valor objetivo aleatorio ---
-            % Posibles umbrales en Siete y Medio excluyendo el 5.5
-            umbrales_posibles = [1:0.5:5, 6:0.5:7]; 
-            umbral = umbrales_posibles(randi(length(umbrales_posibles)));
-
-            while true
-                [carta, baraja] = sacar_carta_sim(baraja);
-                cartas_J(indice, :) = carta;
-                P_J(indice) = carta(2);
-                indice = indice + 1;
-                
-                puntos_J = sum(P_J);
-
-                if puntos_J > 7.5
-                    se_paso = true;
-                    return;
-                end
-
-                if puntos_J > umbral
-                    return;
-                end
-            end
+        case 'dividir'
+            % Estrategia Dividir Juego
+            % TODO: Implementar
 
         otherwise
-            % Default en caso de error tipográfico al llamar la función
-            [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, 'valor_objetivo');
+            % Default: usar estrategia valor objetivo
+            [cartas_J, P_J, baraja, se_paso] = turno_jugador_auto(baraja, 'valor', cartas_J, P_J, carta_visible_casa);
     end
 end
 
-
-% TURNO DE LA CASA 
-
-function [puntos_casa, se_paso] = turno_casa_auto(baraja_original, baraja, cartas_J, P_J, estrategia)
+% turno de la casa
+% Estrategias: probabilistica, valor
+function [puntos_casa, se_paso] = turno_casa_auto(baraja, estrategia, cartas_C, P_C, P_J)
     se_paso = false;
-
-    % Puntos visibles del jugador (la casa no ve la ultima carta)
-    if length(P_J) > 1
-        puntos_visibles_J = sum(P_J(1:end-1));
-    else
-        puntos_visibles_J = 0;  
-    end
-
-    cartas_C = [];
-    P_C = [];
-    indice = 1;
+    puntos_casa = calcular_puntos(P_C);
+    indice = size(cartas_C, 1) + 1;
 
     switch estrategia
-        case 'probabilidad'
-            while true
-                [carta, baraja] = sacar_carta_sim(baraja);
-                cartas_C(indice, :) = carta;
-                P_C(indice) = carta(2);
-                puntos_casa = sum(P_C);
-                indice = indice + 1;
+        case 'probabilistica'
+            % Estrategia de las Probabilidades
+            % TODO: Implementar
 
-                if puntos_casa > 7.5
-                    se_paso = true;
-                    return;
-                end
-
-                [Pg, Pp] = calcular_prob_sim(baraja_original, cartas_J, cartas_C, puntos_visibles_J, puntos_casa);
-
-                if debe_plantarse_sim(Pg, Pp)
-                    return;
-                end
-            end
-
-        case 'valor_objetivo'
-            umbral = 5.5;
-            
-            while true
-                [carta, baraja] = sacar_carta_sim(baraja);
-                cartas_C(indice, :) = carta;
-                P_C(indice) = carta(2);
-                puntos_casa = sum(P_C);
-                indice = indice + 1;
-
-                if puntos_casa > 7.5
-                    se_paso = true;
-                    return;
-                end
-
-                % Función f1(mp) para la casa
-                if puntos_casa > umbral
-                    return;
-                end
-            end
-            
-        case 'valor_objetivo_aleatorio'
-            umbrales_posibles = [1:0.5:7]; % Excluye 5.5
-            umbral = umbrales_posibles(randi(length(umbrales_posibles)));
-            
-            while true
-                [carta, baraja] = sacar_carta_sim(baraja);
-                cartas_C(indice, :) = carta;
-                P_C(indice) = carta(2);
-                puntos_casa = sum(P_C);
-                indice = indice + 1;
-
-                if puntos_casa > 7.5
-                    se_paso = true;
-                    return;
-                end
-
-                if puntos_casa > umbral
-                    return;
-                end
-            end
+        case 'valor'
+            % Estrategia del Valor Objetivo
+            % TODO: Implementar
 
         otherwise
-            [puntos_casa, se_paso] = turno_casa_auto(baraja_original, baraja, cartas_J, P_J, 'valor_objetivo');
+            % Default: usar estrategia valor objetivo
+            [puntos_casa, se_paso] = turno_casa_auto(baraja, 'valor', cartas_C, P_C, P_J);
     end
-end
-
-
-% PROBABILIDADES
-
-function [Pg, Pp] = calcular_prob_sim(baraja_original, cartas_J, cartas_C, puntos_visibles_J, puntos_casa)
-    % Quitar cartas conocidas (visibles del jugador + todas de la casa)
-    cartas_conocidas = [cartas_J(1:end-1, :); cartas_C];
-    baraja_nueva = baraja_original;
-    for i = 1:size(cartas_conocidas, 1)
-        idx = find(baraja_nueva(:,1) == cartas_conocidas(i,1) & baraja_nueva(:,3) == cartas_conocidas(i,3), 1);
-        baraja_nueva(idx, :) = [];
-    end
-
-    num_desconocidas = size(baraja_nueva, 1);
-
-    % Pg: Prob de ganar plantandose
-    % P(A) = prob de que la carta oculta no pase al jugador
-    Pg = 0;
-    valores_unicos = unique(baraja_nueva(:, 2));
-    matriz_eventos = zeros(length(valores_unicos), 2);
-    matriz_eventos(:, 1) = valores_unicos;
-
-    for i = 1:length(valores_unicos)
-        if valores_unicos(i) + puntos_visibles_J <= 7.5
-            matriz_eventos(i, 2) = sum(baraja_nueva(:, 2) == valores_unicos(i));
-        end
-    end
-
-    vector_prob = matriz_eventos(:, 2) / num_desconocidas;
-    PA = sum(vector_prob);  % P(jugador no se paso)
-
-    % P(B|A) = prob de que la casa gane DADO que el jugador no se paso
-    if PA > 0
-        PBA = vector_prob / PA;
-        for i = 1:size(matriz_eventos, 1)
-            if matriz_eventos(i, 2) > 0
-                if puntos_casa >= puntos_visibles_J + matriz_eventos(i, 1)
-                    Pg = Pg + PBA(i);
-                end
-            end
-        end
-    end
-
-    % Pp: Prob de pasarse si la casa pide otra carta
-    se_pasan = (baraja_nueva(:, 2) + puntos_casa) > 7.5;
-    Pp = sum(se_pasan) / num_desconocidas;
-end
-
-
-% DECISION DE PLANTARSE
-function decision = debe_plantarse_sim(Pg, Pp)
-    decision = (Pg >= 0.7) || (Pg >= 0.1 && Pg < 0.7 && Pp >= 0.55);
 end
