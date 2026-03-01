@@ -1,7 +1,7 @@
 function mostrar_figuras(carta_a_mostrar, pos, usuario, handles)
 
 baseDir  = fileparts(mfilename('fullpath'));
-rutaBase = fullfile(baseDir, '..', 'assets', 'images', 'Mazos_de_cartas');
+rutaBase = fullfile(baseDir, '..', 'assets', 'images');
 
 % Si carta_a_mostrar NO tiene extensión .png, viene de Baraja_fig
 % (ej: 'As_de_oros') → convertir a ruta relativa (ej: 'Oros/As_de_oros.png')

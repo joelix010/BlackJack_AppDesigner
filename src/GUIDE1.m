@@ -61,15 +61,14 @@ guidata(hObject, handles);
 
 %CONFIGURACIÓN DE VARIALES GLOBALES PERSONALIZADAS
 handles.P_J = 0.0; % PUNTUACIÓN TOTAL DEL JUGADOR
+handles.cartas_J_val = []; % Valores numéricos de las cartas del jugador
 guidata(hObject, handles);
 
 handles.P_C = 0.0; % PUNTUACIÓN TOTAL DE LA CASA
+handles.cartas_C_val = []; % Valores numéricos de las cartas de la casa
 guidata(hObject, handles);
 
 handles.pos_carta_1 = 1; % USAR con VARIABLES Baraja_figura y Bajara_valor
-guidata(hObject, handles);
-
-handles.cartas_J_val = []; % valores individuales de las cartas del jugador
 guidata(hObject, handles);
 
 handles.total_cartas = 40; % auxiliar para el calculo de probabilidades
@@ -161,45 +160,51 @@ cargar_variables_baraja();
 % SE BARAJEA (handles se actualiza con Baraja_fig y Baraja_val barajeadas)
 handles = barajear(hObject, handles);
 
-% SE REPARTE 1 CARTA AL JUGADOR
-% Tomar la primera carta de la baraja barajeada
-carta_fig = handles.Baraja_fig{handles.pos_carta_1};  % ruta relativa de la imagen
-carta_val = handles.Baraja_val(handles.pos_carta_1);  % valor numérico de la carta
-
-% Actualizar puntuación del jugador
-handles.P_J = handles.P_J + carta_val;
-handles.cartas_J_val = [handles.cartas_J_val, carta_val];
+% SE REPARTE AL JUGADOR (2 cartas)
+for k = 1:2
+    carta_fig = handles.Baraja_fig{handles.pos_carta_1};
+    carta_val = handles.Baraja_val(handles.pos_carta_1);
+    
+    handles.cartas_J_val = [handles.cartas_J_val, carta_val];
+    mostrar_figuras(carta_fig, handles.pos_ver_c, 'jugador', handles);
+    
+    handles.pos_carta_1 = handles.pos_carta_1 + 1;
+    handles.pos_ver_c   = handles.pos_ver_c   + 1;
+end
+handles.P_J = calcular_puntaje(handles.cartas_J_val);
 guidata(hObject, handles);
 
-% INICIO DE CORRECCIÓN (JJ): Mostrar la puntuacion inicial
-% ==========================================================
-% 1. Hacemos visible el panel
+% SE REPARTE A LA CASA (2 cartas)
+% Carta 1 (Visible)
+carta_fig_c1 = handles.Baraja_fig{handles.pos_carta_1};
+carta_val_c1 = handles.Baraja_val(handles.pos_carta_1);
+handles.cartas_C_val = [handles.cartas_C_val, carta_val_c1];
+mostrar_figuras(carta_fig_c1, 1, 'casa', handles); % Muestra en la pos 1 de la casa
+handles.pos_carta_1 = handles.pos_carta_1 + 1;
+
+% Carta 2 (Oculta por ahora, solo la guardamos en lógicos, mostraremos el reverso)
+% Asumiendo que tienes una imagen de reverso
+carta_val_c2 = handles.Baraja_val(handles.pos_carta_1);
+handles.cartas_C_val = [handles.cartas_C_val, carta_val_c2];
+mostrar_figuras('Mazo_BlackJack/Especiales/reverso.png', 2, 'casa', handles); % Oculta en pos 2
+handles.pos_carta_1 = handles.pos_carta_1 + 1;
+
+handles.P_C = calcular_puntaje(handles.cartas_C_val);
+guidata(hObject, handles);
+
+% MOSTRAR RESULTADOS INICIALES EN UI
 set(handles.PanelResultados, 'Visible', 'on');
+set(handles.editResultados, 'String', sprintf('Tu puntaje: %.0f', handles.P_J));
 
-% 2. Escribimos la puntuación inicial en el recuadro rojo
-set(handles.editResultados, 'String', sprintf('%.1f', handles.P_J));
-% ==========================================================
-% FIN DE CORRECCIÓN
+fprintf("Puntaje inicial del jugador: %.0f\n", handles.P_J);
 
-% Mostrar la carta en la posición visual 1 del jugador
-mostrar_figuras(carta_fig, handles.pos_ver_c, 'jugador', handles);
-
-%  Avanzar contadores 
-handles.pos_carta_1 = handles.pos_carta_1 + 1;  % siguiente carta del mazo
-handles.pos_ver_c   = handles.pos_ver_c   + 1;  % siguiente slot visual del jugador
-
-%(JJ) Es CRUCIAL guardar los cambios en handles después de actualizar P_J y editResultados
-guidata(hObject, handles);
-
-fprintf("Carta repartida al jugador: %s  (valor: %.1f) | P_J total: %.1f\n", ...
-        carta_fig, carta_val, handles.P_J);
-
-% SE COMIENZA CON EL CLICLO REPARTIR - PEDIR/PLANTARSE
-
-% SE PASA EL TURNO A LA MAQUINA
-    % Aqui se implementa lo que se hizo en la práctica anterior
-
-% SE EVAUAL LOS RESULTADOS (ver ganador)
+% Verificar si el jugador tiene Blackjack de inicio (21 exacto con 2 cartas)
+if handles.P_J == 21
+    set(handles.editResultados, 'String', '¡Blackjack! Turno de la casa...');
+    set(handles.btnPedir, 'Enable', 'off');
+    % Forzamos turno de la casa para ver si empata
+    btnPlantarse_Callback(hObject, eventdata, handles);
+end
 
 
 
@@ -225,25 +230,23 @@ P_J       = handles.P_J;
 pos_ver_c = handles.pos_ver_c;
 
 % Solo se puede pedir si no se ha pasado y quedan slots visuales
-if (P_J <= 7.5 && pos_ver_c <= 12)
+if (handles.P_J < 21 && pos_ver_c <= 12)
 
     %  Tomar siguiente carta del mazo 
     carta_fig = handles.Baraja_fig{handles.pos_carta_1};
     carta_val = handles.Baraja_val(handles.pos_carta_1);
 
-    %  Actualizar puntuación del jugador 
-    P_J = P_J + carta_val;
-    handles.P_J = P_J;
+    %  Actualizar conjunto de cartas y calcular puntuación real (Aces)
     handles.cartas_J_val = [handles.cartas_J_val, carta_val];
+    handles.P_J = calcular_puntaje(handles.cartas_J_val);
     guidata(hObject, handles);
 
     %  Mostrar la carta en el slot visual correspondiente 
     mostrar_figuras(carta_fig, pos_ver_c, 'jugador', handles);
-    fprintf("Carta pedida: %s  (valor: %.1f) | P_J total: %.1f\n", carta_fig, carta_val, P_J);
+    fprintf("Carta pedida: %s  | P_J total: %.0f\n", carta_fig, handles.P_J);
 
-    %
     set(handles.PanelResultados,'Visible','on');
-        set(handles.editResultados,'String',P_J);
+    set(handles.editResultados,'String', sprintf('Tu puntaje: %.0f', handles.P_J));
 
     %  Avanzar contadores 
     handles.pos_carta_1 = handles.pos_carta_1 + 1;
@@ -251,15 +254,20 @@ if (P_J <= 7.5 && pos_ver_c <= 12)
     guidata(hObject, handles);
 
     %  Verificar si el jugador se pasó DESPUÉS de sumar 
-    if P_J > 7.5
-        fprintf("¡El jugador se ha pasado! P_J = %.1f\n", P_J);
+    if handles.P_J > 21
+        fprintf("¡El jugador se ha pasado (Bust)! P_J = %.0f\n", handles.P_J);
         set(handles.PanelResultados, 'Visible', 'on');
-        set(handles.editResultados, 'String', sprintf('¡Te has pasado! (%.1f) Gana la Casa!!!', P_J));
+        set(handles.editResultados, 'String', sprintf('¡Te has pasado! (%.0f) Gana la Casa.', handles.P_J));
 
-        % --- Correccion JJ de bug (boton plantarse):  ---
         set(handles.btnPedir, 'Enable', 'off');
         set(handles.btnPlantarse, 'Enable', 'off');
-        % ---------------------------
+        
+        % Opcional: revelar la carta oculta de la casa para mostrarla
+        carta_oculta_fig = handles.Baraja_fig{handles.pos_carta_1 - 2}; % Reconstruir ruta asumiendo posiciones pos_carta
+        mostrar_figuras(carta_oculta_fig, 2, 'casa', handles);
+    elseif handles.P_J == 21
+         % Auto plantarse si llega a 21
+         btnPlantarse_Callback(hObject, eventdata, handles);
     end
 
 else
@@ -274,9 +282,8 @@ end
 function btnPlantarse_Callback(hObject, eventdata, handles)
 fprintf("Has presionado el botón de 'PLANTARSE'\n");
 
-% correccion JJ de bug (boton plantarse):
 % --- VALIDACIÓN DE SEGURIDAD ---
-if handles.P_J > 7.5 || handles.P_J == 0
+if handles.P_J > 21 || handles.P_J == 0
     return; % No hace nada si ya perdió o no tiene cartas
 end
 % Desactivar botones para que no se presione nada mientras la casa juega
@@ -284,37 +291,24 @@ set(handles.btnPedir, 'Enable', 'off');
 set(handles.btnPlantarse, 'Enable', 'off');
 % -------------------------------
 
-% El jugador se planta: mostrar mensaje provisional
-P_J = handles.P_J;
-fprintf("El jugador se planta con P_J = %.2f\n", P_J);
+% El jugador se planta
+fprintf("El jugador se planta con P_J = %.0f\n", handles.P_J);
 set(handles.PanelResultados, 'Visible', 'on');
-set(handles.editResultados, 'String', sprintf('Te plantaste con %.1f. Turno de la casa...', P_J));
+set(handles.editResultados, 'String', sprintf('Te plantaste con %.0f. Turno de la casa...', handles.P_J));
 
-% TURNO DE LA CASA 
-carta_fig_c = handles.Baraja_fig{handles.pos_carta_1};
-carta_val_c = handles.Baraja_val(handles.pos_carta_1);
-handles.P_C         = handles.P_C + carta_val_c;
-handles.pos_carta_1 = handles.pos_carta_1 + 1;
-guidata(hObject, handles);
+% REVELAR LA CARTA OCULTA DE LA CASA (Asumiendo que es la segunda carta repartida)
+% Tenemos que reconstruir cuál fue la imagen. Las repartimos hace unos turnos.
+% Como la casa solo tiene 2 cartas en este punto, miramos en Baraja_fig.
+% La carta 1 de la casa estuvo en (pos_inicial_casa), la 2 en (pos_inicial_casa + 1)
+% Como no guardamos la ruta en el array `cartas_C_val`, vamos a buscar la carta en Baraja_val que coincida... o mejor, dado que Baraja no cambia de orden post-barajeo:
+% La casa recibió cartas en los índices 3 y 4 absolutos del juego inicial.
+% Así que la carta oculta es la de índice absoluto 4 del mazo.
+idx_carta2_casa = 4;
+carta_fig_c2 = handles.Baraja_fig{idx_carta2_casa};
+mostrar_figuras(carta_fig_c2, 2, 'casa', handles);
 
-% --- MUESTRA LA PRIMERA CARTA ---
-mostrar_figuras(carta_fig_c, 1, 'casa', handles);
-
-% CAMBIO JJ (juego de la casa): pausas para las cartas de la casa
-% ==========================================================
-drawnow;      % Obliga a MATLAB a dibujar la carta antes de seguir
-pause(0.8);   % Espera 0.8 segundos (puedes ajustar el tiempo)
-% ==========================================================
-% FIN DE CAMBIO
-
-fprintf("Casa recibe 1a carta: %s (valor: %.1f) | P_C = %.2f\n", carta_fig_c, carta_val_c, handles.P_C);
-
-% Verificar si la primera carta ya pasa de 7.5 (muy raro pero posible)
-if handles.P_C > 7.5
-    set(handles.editResultados, 'String', ...
-        sprintf('¡Ganaste! La casa se pasó en su primera carta (%.1f vs tu %.1f)', handles.P_C, P_J));
-    return;
-end
+drawnow;
+pause(1.0);
 
 % BUCLE COMPLETO DE LA CASA   
 handles = juega_casa(hObject, handles);

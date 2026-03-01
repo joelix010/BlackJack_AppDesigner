@@ -1,44 +1,36 @@
 function handles = juega_casa(hObject, handles)
     fprintf("----------------------------------------------------------------------------\n");
     fprintf("Es el turno de la casa...\n");
-    fprintf("La casa empieza con %.2f (ya tiene su primera carta)\n\n", handles.P_C);
+    fprintf("La casa empieza con %.2f (ya tiene su primera carta y revelará la segunda)\n\n", handles.P_C);
 
-    % Slot visual de la casa (pos 1 ya fue usada en btnPlantarse, empezar en 2)
-    pos_ver_c_casa = 2;
+    % Slot visual de la casa (pos 1 y 2 ya fueron usadas en el reparto inicial)
+    pos_ver_c_casa = 3;
 
-    % Puntos visibles del jugador (la casa NO ve la última carta)
-    % Igual que en SiesteYMedioBi2.m: puntos_visibles_J = sum(P_J(1:end-1))
-    cartas_J = handles.cartas_J_val;
-    if length(cartas_J) > 1
-        puntos_visibles_J = sum(cartas_J(1:end-1));
-    else
-        puntos_visibles_J = 0;  % solo tiene 1 carta -> toda oculta
-    end
-    ultima_carta_J_val = cartas_J(end);  % valor de la carta oculta
-
-    % BUCLE DE TURNO DE LA CASA
+    % BUCLE DE TURNO DE LA CASA: Estrategia del Valor Objetivo (>= 17)
     while true
-
-        % Calcular probabilidades con el estado actual del mazo
-        [Pg, Pp] = calcular_probabilidades_casa(handles, puntos_visibles_J, ultima_carta_J_val);
-
-        fprintf('Pg (ganar plantandose) = %.4f\n', Pg);
-        fprintf('Pp (pasarse si pide)   = %.4f\n\n', Pp);
-
-        % Decision: plantarse o pedir?
-        if debe_plantarse_casa(Pg, Pp)
-            fprintf("La casa decide plantarse con %.2f puntos.\n", handles.P_C);
+        % Evaluar puntaje actual de la casa
+        handles.P_C = calcular_puntaje(handles.cartas_C_val);
+        
+        % Mostrar estado
+        fprintf("Puntaje actual de la casa: %.2f\n", handles.P_C);
+        
+        % Condición de parada obligatoria: >= 17
+        if handles.P_C >= 17
+            fprintf("La casa debe plantarse con %.2f puntos.\n", handles.P_C);
             break;
         end
 
         % La casa pide una carta mas
-        fprintf("La casa decide pedir otra carta...\n");
+        fprintf("La casa tiene menos de 17, está obligada a pedir otra carta...\n");
 
         carta_fig = handles.Baraja_fig{handles.pos_carta_1};
         carta_val = handles.Baraja_val(handles.pos_carta_1);
 
-        handles.P_C         = handles.P_C + carta_val;
+        % Añadir la nueva carta al conjunto de la casa
+        handles.cartas_C_val = [handles.cartas_C_val, carta_val];
         handles.pos_carta_1 = handles.pos_carta_1 + 1;
+        handles.P_C = calcular_puntaje(handles.cartas_C_val); % Recalcular con la nueva carta
+        
         guidata(hObject, handles);
 
         % Mostrar carta en la GUI (slots C2, C3, ...)
@@ -47,86 +39,27 @@ function handles = juega_casa(hObject, handles)
             pos_ver_c_casa = pos_ver_c_casa + 1;
         end
 
-        % CAMBIO JJ: PAUSA POR CADA CARTA EXTRA
+        % PAUSA POR CADA CARTA EXTRA
         % ==========================================================
         drawnow;    % Refresca la interfaz visual
         pause(1.0); % Pausa de 1 segundo entre cada carta nueva
         % ==========================================================
-        % FIN DE CAMBIO
 
         fprintf("Casa recibe carta: %s (valor: %.1f) | P_C total: %.2f\n", ...
                 carta_fig, carta_val, handles.P_C);
 
-        % Se paso la casa? 
-        if handles.P_C > 7.5
-            fprintf("\nLa casa se paso con %.2f. El jugador gana!\n", handles.P_C);
+        % ¿Se pasó la casa? 
+        if handles.P_C > 21
+            fprintf("\nLa casa se paso con %.2f (Bust). ¡El jugador gana!\n", handles.P_C);
             set(handles.PanelResultados, 'Visible', 'on');
             set(handles.editResultados, 'String', ...
-                sprintf('Ganaste! La casa se paso (%.1f vs tu %.1f)', handles.P_C, handles.P_J));
+                sprintf('¡Ganaste! La casa se pasó (%.1f vs tu %.1f)', handles.P_C, handles.P_J));
             return;
         end
     end
 
-    %  GANA LA CASA
+    % DETERMINAR GANADOR FINAL
     handles = determinar_ganador_gui(hObject, handles);
-end
-
-
-%  calcular probabilidades 
-%   - Cartas desconocidas = mazo restante + carta oculta del jugador
-%   - Pg usa probabilidad condicional: P(casa gana | jugador no se pasa)
-function [Pg, Pp] = calcular_probabilidades_casa(handles, puntos_visibles_J, ultima_carta_J_val)
-    % Cartas en el mazo (no repartidas) + carta oculta del jugador
-    idx_inicio       = handles.pos_carta_1;
-    valores_mazo     = handles.Baraja_val(idx_inicio:end);
-    valores_desconocidos = [valores_mazo, ultima_carta_J_val];
-    num_desconocidas     = length(valores_desconocidos);
-    puntos_casa          = handles.P_C;
-
-    if num_desconocidas <= 0
-        Pg = 0; Pp = 0;
-        return;
-    end
-
-    %  P(A)  la carta oculta no pasa al jugador de 7.5 
-    valores_unicos = unique(valores_desconocidos);
-    matriz_eventos = zeros(length(valores_unicos), 2);
-    matriz_eventos(:, 1) = valores_unicos;
-
-    for i = 1:length(valores_unicos)
-        v = valores_unicos(i);
-        if v + puntos_visibles_J <= 7.5
-            cant = sum(valores_desconocidos == v);
-            matriz_eventos(i, 2) = cant;
-        end
-    end
-
-    vector_prob = matriz_eventos(:, 2) / num_desconocidas;
-    PA = sum(vector_prob);
-
-    %  P(B|A) -> dado que no se paso, la casa le gana? 
-    Pg = 0;
-    if PA > 0
-        PBA = vector_prob / PA;
-        for i = 1:size(matriz_eventos, 1)
-            if matriz_eventos(i, 2) > 0
-                v = matriz_eventos(i, 1);
-                if puntos_casa >= puntos_visibles_J + v
-                    Pg = Pg + PBA(i);
-                end
-            end
-        end
-    end
-
-    %  probabilidad de pasarse si la casa pide una carta mas
-    se_pasan = (valores_desconocidos + puntos_casa) > 7.5;
-    Pp = sum(se_pasan) / num_desconocidas;
-end
-
-
-%  decision de plantarse
-function decision = debe_plantarse_casa(Pg, Pp)
-    decision = (Pg >= 0.7) || (Pg >= 0.1 && Pg < 0.7 && Pp >= 0.55);
 end
 
 
@@ -137,15 +70,16 @@ function handles = determinar_ganador_gui(hObject, handles)
 
     set(handles.PanelResultados, 'Visible', 'on');
 
-    if P_C > P_J
-        msg = sprintf('Gana la Casa! (%.1f vs tu %.1f)', P_C, P_J);
+    if P_C > 21 || P_J > P_C
+        msg = sprintf('¡Ganaste! (%.1f vs casa %.1f)', P_J, P_C);
+        fprintf("¡El jugador gana! (%.2f vs %.2f)\n", P_J, P_C);
+    elseif P_C > P_J
+        msg = sprintf('¡Gana la Casa! (%.1f vs tu %.1f)', P_C, P_J);
         fprintf("La casa ha ganado. (%.2f vs %.2f)\n", P_C, P_J);
-    elseif P_C == P_J
-        msg = sprintf('Empate (%.1f), pero gana la Casa en caso de empate.', P_C);
-        fprintf("Empate %.2f - gana la casa.\n", P_C);
     else
-        msg = sprintf('Ganaste! (%.1f vs casa %.1f)', P_J, P_C);
-        fprintf("El jugador gana! (%.2f vs %.2f)\n", P_J, P_C);
+        % En Blackjack un empate es un 'Push' (empate real, a veces se devuelve el dinero)
+        msg = sprintf('Empate a %.1f puntos (Push).', P_C);
+        fprintf("Empate %.2f - Push.\n", P_C);
     end
 
     set(handles.editResultados, 'String', msg);

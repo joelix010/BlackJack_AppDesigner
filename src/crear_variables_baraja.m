@@ -4,21 +4,33 @@
 
 function crear_variables_baraja()
 
-    Baraja_fig = {
-        'Oros/1_de_Oros.png',      'Espadas/1_de_Espadas.png',      'Copas/1_de_Copas.png',      'Bastos/1_de_Bastos.png', ...
-        'Oros/2_de_Oros.png',          'Espadas/2_de_Espadas.png',          'Copas/2_de_Copas.png',          'Bastos/2_de_Bastos.png', ...
-        'Oros/3_de_Oros.png',          'Espadas/3_de_Espadas.png',          'Copas/3_de_Copas.png',          'Bastos/3_de_Bastos.png', ...
-        'Oros/4_de_Oros.png',          'Espadas/4_de_Espadas.png',          'Copas/4_de_Copas.png',          'Bastos/4_de_Bastos.png', ...
-        'Oros/5_de_Oros.png',          'Espadas/5_de_Espadas.png',          'Copas/5_de_Copas.png',          'Bastos/5_de_Bastos.png', ...
-        'Oros/6_de_Oros.png',          'Espadas/6_de_Espadas.png',          'Copas/6_de_Copas.png',          'Bastos/6_de_Bastos.png', ...
-        'Oros/7_de_Oros.png',          'Espadas/7_de_Espadas.png',          'Copas/7_de_Copas.png',          'Bastos/7_de_Bastos.png', ...
-        'Oros/10_de_Oros.png',         'Espadas/10_de_Espadas.png',         'Copas/10_de_Copas.png',         'Bastos/10_de_Bastos.png', ...
-        'Oros/11_de_Oros.png',         'Espadas/11_de_Espadas.png',         'Copas/11_de_Copas.png',         'Bastos/11_de_Bastos.png', ...
-        'Oros/12_de_Oros.png',         'Espadas/12_de_Espadas.png',         'Copas/12_de_Copas.png',         'Bastos/12_de_Bastos.png'
-    };
-
-    Baraja_val = [1,1,1,1, 2,2,2,2, 3,3,3,3, 4,4,4,4, 5,5,5,5, ...
-                  6,6,6,6, 7,7,7,7, 0.5,0.5,0.5,0.5, 0.5,0.5,0.5,0.5, 0.5,0.5,0.5,0.5];
+    % 52 cartas: 4 palos * 13 cartas
+    % Rutas en la carpeta 'Mazo_BlackJack'
+    
+    palos = {'Corazones', 'Diamantes', 'Picas', 'Treboles'};
+    Baraja_fig = cell(1, 52);
+    Baraja_val = zeros(1, 52);
+    
+    idx = 1;
+    for p = 1:length(palos)
+        palo = palos{p};
+        for v = 1:13
+            % Formar la ruta: 'Mazo_BlackJack/Corazones/1_de_Corazones.png'
+            nombre_archivo = sprintf('Mazo_BlackJack/%s/%d_de_%s.png', palo, v, palo);
+            Baraja_fig{idx} = nombre_archivo;
+            
+            % Asignar valor de la carta
+            if v == 1
+                Baraja_val(idx) = 11; % El As inicialmente vale 11
+            elseif v >= 10
+                Baraja_val(idx) = 10; % J (11), Q (12), K (13) y el 10 valen 10
+            else
+                Baraja_val(idx) = v;  % Las demás valen su número
+            end
+            
+            idx = idx + 1;
+        end
+    end
 
     save("Baraja.mat", 'Baraja_fig', 'Baraja_val');
 end
